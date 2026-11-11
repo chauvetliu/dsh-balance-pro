@@ -90,6 +90,19 @@ function makeElement(tag) {
   return node
 }
 
+/** Depth-first search for the first descendant (or the node) with a class. */
+function findByClass(node, className) {
+  // Elements carry a space-separated class list, so match one token.
+  if (typeof node.className === 'string' && node.className.split(/\s+/u).includes(className)) return node
+  for (const child of node.children || []) {
+    if (typeof child.className === 'string') {
+      const found = findByClass(child, className)
+      if (found) return found
+    }
+  }
+  return undefined
+}
+
 /**
  * A page stub: `#root`-less document with a body, plus a module-system facade
  * that records what the bundle registers.
@@ -144,6 +157,14 @@ function runClient(page, options = {}) {
   const pendingTimers = []
   const fetchImpl = (url) => {
     fetched.push(String(url))
+    if (String(url).includes('usage.json') && options.usage !== undefined) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(options.usage),
+        text: () => Promise.resolve(''),
+      })
+    }
     const payload = options.payload ?? {
       ok: true,
       totalBalance: 123.45,
@@ -234,7 +255,7 @@ test('a burst of refreshes shares one in-flight read', async () => {
   const pill = host.children.find((child) => child.className === 'dsb-pill')
   for (const listener of pill.listeners.click || []) listener({ target: pill })
   const card = host.children.find((child) => child.className === 'dsb-panel')
-  const refresh = card.children.find((child) => child.className === 'dsb-actions').children[0]
+  const refresh = findByClass(card, 'dsb-actions').children[0]
   const before = fetched.filter((url) => url.includes('force=1')).length
   for (let i = 0; i < 5; i += 1) {
     for (const listener of refresh.listeners.click || []) listener({ target: refresh })
@@ -272,12 +293,14 @@ test('apply() mounts a plain-DOM pill into the page body', () => {
 
   const button = host.children.find((child) => child.className === 'dsb-pill')
   assert.ok(button, 'the pill button exists')
-  // Badge layout: the amount, then the shoulder alert dot, then the state glyph.
-  assert.equal(button.children[0].className, 'dsb-number')
-  assert.equal(button.children[1].className, 'dsb-alert')
-  assert.equal(button.children[2].className, 'dsb-glyph')
+  // Badge layout: the icon square, the amount, then the shoulder alert dot.
+  assert.equal(button.children[0].className, 'dsb-kind')
+  assert.equal(button.children[1].className, 'dsb-number')
+  assert.equal(button.children[2].className, 'dsb-alert')
+  assert.match(button.children[0].innerHTML, /<svg/u, 'the square carries an icon, not a word')
+  assert.equal(button.children.length, 3)
   // Before the first payload lands the label is the loading placeholder.
-  assert.equal(button.children[0].textContent, '…')
+  assert.equal(button.children[1].textContent, '…')
 
   const card = host.children.find((child) => child.className === 'dsb-panel')
   assert.ok(card, 'the detail card exists')
@@ -311,13 +334,13 @@ test('the first read paints the amounts from the Host payload', async () => {
 
   const host = page.body.children[0]
   const button = host.children.find((child) => child.className === 'dsb-pill')
-  // The pill stays compact: symbol only, no currency code.
-  assert.equal(button.children[0].textContent, '¥123.45')
+  // The pill stays compact: symbol + number, no currency code.
+  assert.equal(button.children[1].textContent, '¥123.45')
   assert.match(button.title, /¥123\.45/u)
   assert.ok(fetched.some((url) => url.endsWith('/dsh-balance-pro/balance.json')), JSON.stringify(fetched))
 
   const card = host.children.find((child) => child.className === 'dsb-panel')
-  const rows = card.children.find((child) => child.tagName === 'DL')
+  const rows = findByClass(card, 'dsb-body-balance').children.find((child) => child.tagName === 'DL')
   // The <dd> holds the number as its own text plus a `<small class="dsb-unit">`.
   const amountOf = (line) => line.children[1].textContent
   const unitOf = (line) => line.children[1].children.find((part) => part.className === 'dsb-unit')
@@ -331,11 +354,63 @@ test('the first read paints the amounts from the Host payload', async () => {
   }
 
   // The card names the signed-in account, not the key hash.
-  const meta = card.children.find((child) => child.className === 'dsb-meta')
+  const meta = findByClass(card, 'dsb-meta')
   // The timestamp and the account are separate lines.
   assert.equal(meta.children.length, 2)
   assert.match(meta.children[0].textContent, /^更新于/u)
   assert.match(meta.children[1].textContent, /^账号 cha\*\*\*@163\.com$/u)
+})
+
+test('a huge balance is abbreviated in the pill but exact in the card', async () => {
+  const page = fakePage()
+  runClient(page, {
+    payload: {
+      ok: true,
+      totalBalance: 9999999.99,
+      rechargeBalance: 9999999.99,
+      bonusBalance: 0,
+      currency: 'CNY',
+      isAvailable: true,
+      stale: false,
+      updatedAt: new Date().toISOString(),
+      lowBalanceThreshold: 10,
+      refreshMinutes: 10,
+    },
+  })
+  const exported = page.registrations[0].factory(() => undefined)
+  await mountForTest(exported)
+  const host = page.body.children[0]
+  const button = host.children.find((child) => child.className === 'dsb-pill')
+  // ¥10m instead of ¥9,999,999.99 — the pill never wraps or clips, and the
+  // abbreviated number always states its scale, never a truncated digit run.
+  assert.equal(button.children[1].textContent, '¥10m')
+  assert.equal(button.children[1].getAttribute('data-compact'), 'true')
+  // The exact amount stays reachable: tooltip and the card's total.
+  assert.match(button.title, /9,999,999\.99/u)
+  const card = host.children.find((child) => child.className === 'dsb-panel')
+  const rows = findByClass(card, 'dsb-body-balance').children.find((child) => child.tagName === 'DL')
+  // The card keeps the exact amount next to the 27px total; only the pill and
+  // the compact card rows abbreviate.
+  const title = findByClass(findByClass(card, 'dsb-head'), 'dsb-title')
+  assert.ok(title)
+  assert.match(button.title, /9,999,999\.99/u)
+})
+
+test('amounts under a million keep their cents', async () => {
+  for (const [value, expected] of [[999999.99, '¥999,999.99'], [1234.5, '¥1,234.5'], [95.02, '¥95.02']]) {
+    const page = fakePage()
+    runClient(page, {
+      payload: {
+        ok: true, totalBalance: value, rechargeBalance: value, bonusBalance: 0, currency: 'CNY',
+        isAvailable: true, stale: false, updatedAt: new Date().toISOString(), lowBalanceThreshold: 10, refreshMinutes: 10,
+      },
+    })
+    const exported = page.registrations[0].factory(() => undefined)
+    await mountForTest(exported)
+    const button = page.body.children[0].children.find((child) => child.className === 'dsb-pill')
+    assert.equal(button.children[1].textContent, expected, String(value))
+    assert.equal(button.children[1].getAttribute('data-compact'), null)
+  }
 })
 
 test('the painted language follows <html lang> at paint time, not at load time', async () => {
@@ -347,7 +422,7 @@ test('the painted language follows <html lang> at paint time, not at load time',
   await mountForTest(exported)
   const host = page.body.children[0]
   const card = host.children.find((child) => child.className === 'dsb-panel')
-  const rows = card.children.find((child) => child.tagName === 'DL')
+  const rows = findByClass(card, 'dsb-body-balance').children.find((child) => child.tagName === 'DL')
   assert.equal(rows.children[0].children[0].textContent, 'Total')
 
   // The locale plugin switches the page to Chinese and the pill re-renders.
@@ -360,7 +435,7 @@ test('the painted language follows <html lang> at paint time, not at load time',
   await mountForTest(remounted)
   const host2 = page.body.children[0]
   const card2 = host2.children.find((child) => child.className === 'dsb-panel')
-  const rows2 = card2.children.find((child) => child.tagName === 'DL')
+  const rows2 = findByClass(card2, 'dsb-body-balance').children.find((child) => child.tagName === 'DL')
   assert.equal(rows2.children[0].children[0].textContent, '合计')
 })
 
@@ -371,7 +446,8 @@ test('a failed read paints the empty state instead of a zero', async () => {
   await mountForTest(exported)
 
   const button = page.body.children[0].children.find((child) => child.className === 'dsb-pill')
-  assert.equal(button.children[0].textContent, '余额 —')
+  assert.equal(button.children[1].textContent, '—', 'an unreadable amount is a dash, not a fake zero')
+  assert.equal(button.children[1].getAttribute('data-missing'), 'true')
   assert.match(button.title, /未配置 DeepSeek API Key/u)
 })
 
@@ -412,15 +488,15 @@ test('the pill is fixed on the account row and cannot be dragged', () => {
   const exported = page.registrations[0].factory(() => undefined)
   exported.apply({ effect: (factory) => factory() })
   const host = page.body.children[0]
-  host.offsetWidth = 96
-  host.offsetHeight = 34
-  host.getBoundingClientRect = () => ({ left: 0, top: 0, width: 96, height: 34 })
+  host.offsetWidth = 92
+  host.offsetHeight = 26
+  host.getBoundingClientRect = () => ({ left: 0, top: 0, width: 92, height: 26 })
 
   // Positioned inside the row: right-aligned and vertically centered.
   const left = Number(String(host.style.left).replace('px', ''))
   const top = Number(String(host.style.top).replace('px', ''))
-  assert.ok(left > 12 && left + 96 <= 228, `left=${left}`)
-  assert.equal(top, 700 + Math.round((44 - 34) / 2))
+  assert.ok(left > 12 && left + 92 <= 228, `left=${left}`)
+  assert.equal(top, 700 + Math.round((44 - 26) / 2), 'vertically centred on the 44px row')
   // A saved position from the old build is discarded, not honoured.
   assert.equal('dsh-balance-pro.placement' in stored, false)
 
@@ -518,3 +594,110 @@ test('the injected stylesheet stays scoped to the pill and the card', () => {
   }
   assert.ok(!fs.existsSync(path.join(ROOT, 'client.css')), 'no orphan stylesheet file')
 })
+
+test('the usage tab reads usage.json lazily and paints today, peak and turns', async () => {
+  const page = fakePage()
+  const { fetched } = runClient(page, { usage: usagePayload() })
+  const exported = page.registrations[0].factory(() => undefined)
+  await mountForTest(exported)
+  // The balance read happens at mount; usage waits for its tab.
+  assert.equal(fetched.some((url) => url.includes('usage.json')), false)
+
+  const host = page.body.children[0]
+  const card = host.children.find((child) => child.className === 'dsb-panel')
+  const tabs = findByClass(card, 'dsb-tabs')
+  for (const listener of tabs.children[1].listeners.click || []) listener({ stopPropagation() {} })
+  for (let i = 0; i < 4; i += 1) await new Promise((resolve) => setImmediate(resolve))
+
+  assert.ok(fetched.some((url) => url.endsWith('/dsh-balance-pro/usage.json')), JSON.stringify(fetched))
+  const body = findByClass(card, 'dsb-body-usage')
+  assert.equal(body.hidden, false)
+  assert.equal(findByClass(card, 'dsb-body-balance').hidden, true)
+
+  const amount = findByClass(body, 'dsb-today-amount')
+  assert.equal(amount.textContent, '¥0.014')
+  const ring = findByClass(body, 'dsb-ring')
+  assert.equal(ring.getAttribute('data-empty'), 'false')
+  assert.equal(findByClass(body, 'dsb-ring-center').textContent, '37%', 'the runway ring shows a real fraction')
+  const peak = findByClass(body, 'dsb-tier-peak')
+  assert.match(peak.textContent, /高峰算力 ¥0\.01/u)
+  const rows = findByClass(body, 'dsb-turns').children
+  assert.equal(rows.length, 2)
+  assert.match(rows[0].children[2].textContent, /¥/)
+  const bars = findByClass(body, 'dsb-spark').children
+  assert.equal(bars.length, 7)
+  assert.equal(bars[6].getAttribute('data-today'), 'true')
+})
+
+test('a malformed usage payload never breaks the balance tab', async () => {
+  const page = fakePage()
+  // `turns.recent` is not a list and a turn has no tokens: the usage body must
+  // degrade, not throw, and the balance tab must still paint.
+  const broken = usagePayload()
+  broken.turns.recent = { not: 'an array' }
+  broken.series = 'nope'
+  runClient(page, { usage: broken })
+  const exported = page.registrations[0].factory(() => undefined)
+  await mountForTest(exported)
+  const host = page.body.children[0]
+  const card = host.children.find((child) => child.className === 'dsb-panel')
+  const tabs = findByClass(card, 'dsb-tabs')
+  for (const listener of tabs.children[1].listeners.click || []) listener({ stopPropagation() {} })
+  for (let i = 0; i < 4; i += 1) await new Promise((resolve) => setImmediate(resolve))
+  // The balance tab still shows the amount it read.
+  const button = host.children.find((child) => child.className === 'dsb-pill')
+  assert.equal(button.children[1].textContent, '¥123.45')
+  assert.equal(findByClass(card, 'dsb-body-balance').hidden, true)
+})
+
+test('the usage tab says so when nothing has been spent yet', async () => {
+  const page = fakePage()
+  const empty = usagePayload()
+  empty.today.yuan = 0
+  empty.today.turns = 0
+  empty.runway = null
+  empty.turns.recent = []
+  empty.turns.total = 0
+  empty.series = empty.series.map((day) => ({ ...day, yuan: 0 }))
+  runClient(page, { usage: empty })
+  const exported = page.registrations[0].factory(() => undefined)
+  await mountForTest(exported)
+  const host = page.body.children[0]
+  const card = host.children.find((child) => child.className === 'dsb-panel')
+  const tabs = findByClass(card, 'dsb-tabs')
+  for (const listener of tabs.children[1].listeners.click || []) listener({ stopPropagation() {} })
+  for (let i = 0; i < 4; i += 1) await new Promise((resolve) => setImmediate(resolve))
+  const body = findByClass(card, 'dsb-body-usage')
+  const emptyRow = findByClass(body, 'dsb-turns').children[0]
+  assert.equal(emptyRow.textContent, '今天还没有结算的对话')
+  assert.equal(findByClass(body, 'dsb-ring').getAttribute('data-empty'), 'true')
+  assert.match(findByClass(body, 'dsb-today-sub').textContent, /今日暂无消耗/u)
+})
+
+/** One usage.json body shaped like the Host's. */
+function usagePayload() {
+  const now = new Date()
+  const day = (offset) => {
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset)
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  }
+  const at = (hour) => new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, 5).toISOString()
+  return {
+    ok: true,
+    currency: 'CNY',
+    timezone: 'Asia/Shanghai',
+    today: { day: day(0), yuan: 0.0138, turns: 2, tokens: 4200, unpricedTurns: 0, peakYuan: 0.0132, offPeakYuan: 0.0006, savedYuan: 0.0006, ifAllOffPeakYuan: 0.0069 },
+    runway: { days: 2.7, progress: 0.37, burnYuan: 0.53 },
+    peak: { now: true, windows: [{ start: '09:00', end: '12:00' }, { start: '14:00', end: '18:00' }], weekdayOnly: true, offPeakMultiplier: 0.5, nextChange: { inMinutes: 90, at: '14:00' } },
+    series: [6, 5, 4, 3, 2, 1, 0].map((back, index) => ({ day: day(back), yuan: index * 0.004, tokens: 0, turns: 0, unpriced: 0 })),
+    turns: {
+      total: 2,
+      unpriced: 0,
+      hasMore: false,
+      recent: [
+        { session: 's1', turn: 4, at: at(10), day: day(0), peak: true, card: 'deepseek-flash', model: 'deepseek-flash', yuan: 0.0088, tokens: { uncachedInput: 1200, output: 800, cacheRead: 0, cacheWrite: 0 } },
+        { session: 's1', turn: 3, at: at(9), day: day(0), peak: false, card: 'deepseek-flash', model: 'deepseek-flash', yuan: 0.005, tokens: { uncachedInput: 4000, output: 200, cacheRead: 12000, cacheWrite: 0 } },
+      ],
+    },
+  }
+}

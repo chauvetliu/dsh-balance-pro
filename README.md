@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/badge.webp" width="220" alt="dsh-balance-pro 余额徽章" />
+<img src="docs/badge.webp" width="132" alt="dsh-balance-pro 余额徽章" />
 
 <br />
 
@@ -11,7 +11,7 @@
 
 <p>
   <img src="https://img.shields.io/badge/license-MIT-4d6bfe" alt="MIT License" />
-  <img src="https://img.shields.io/badge/tests-64%20passing-22c55e" alt="64 tests passing" />
+  <img src="https://img.shields.io/badge/tests-102%20passing-22c55e" alt="102 tests passing" />
   <img src="https://img.shields.io/badge/DSH-0.2.2--rc.1-5686fe" alt="DSH 0.2.2-rc.1" />
   <img src="https://img.shields.io/badge/telemetry-none-64748b" alt="No telemetry" />
 </p>
@@ -21,16 +21,18 @@
   <a href="#配置">配置</a> ·
   <a href="#界面">界面</a> ·
   <a href="docs/visual.md">视觉设计</a> ·
-  <a href="#常见问题">常见问题</a>
+  <a href="#界面">界面</a> · <a href="#常见问题">常见问题</a>
 </p>
 
 </div>
 
 ---
 
-在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 里显示 DeepSeek 账户余额：**侧边栏账号行右端一个余额徽章**，点开是一张明细卡片——合计、充值余额、赠送余额、累计消费、更新时间和账号，带「刷新」和「去充值」。
+在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 里显示 DeepSeek 账户余额：**侧边栏账号行右端一个 `余额 ¥94.96` 徽章**，点开是一张明细卡片——合计、充值余额、赠送余额、累计消费、更新时间和账号，带「刷新」和「去充值」。
 
 不需要填 Key：配了 API Key 或登录过客户端，二者有一个就能读。
+
+余额与用量分成两个标签页：默认停在**余额**，切到**用量**看今日消耗、峰谷价与逐轮消耗。
 
 <table>
   <tr>
@@ -38,18 +40,21 @@
     <td width="50%"><img src="docs/hero-light.webp" alt="浅色主题下的余额卡片" /></td>
   </tr>
   <tr>
-    <td align="center"><sub><b>深色</b> · 跟随宿主主题</sub></td>
-    <td align="center"><sub><b>浅色</b> · 同一套令牌</sub></td>
+    <td align="center"><sub><b>余额</b> · 深色 · 跟随宿主主题</sub></td>
+    <td align="center"><sub><b>余额</b> · 浅色 · 同一套令牌</sub></td>
   </tr>
 </table>
+
+![用量标签页](docs/usage-hero.webp)
 
 ## 为什么值得装
 
 - **只读**：不写会话、不改模型配置；点「去充值」才会打开 DeepSeek 充值页。
 - **Key 不出宿主进程**：浏览器半区只拿到金额和平台掩码后的账号，拿不到 key、请求头或上游原文。
 - **失败不拖垮页面**：没配 key、key 失效、断网时徽章显示 `余额 —`，卡片里写明原因；不会让 DSH 启动失败。
-- **液态玻璃**：宿主真实令牌 `--dsw-alias-*` / `--dsw-static-deepseek-*`、40px 背板模糊、镜面描边与细噪点。
-- **跟随宿主主题**：读取页面背景与 `data-ds-dark-theme`，宿主强制明暗也能跟上，不只看系统设置。
+- **扁平半透明玻璃**：两种外观都是纯半透明底 + 1px 发丝边 + 短阴影，没有渐变高光、镜面描边、噪点或装饰水印；靠背景模糊（20–28px）保留玻璃感。
+- **跟随系统外观**：以 macOS 的浅色/深色为准，切换即时生效；浅色是白底半透明，深色是深灰半透明，同一套结构。
+- **用量标签页**：今日消耗、峰谷价与逐轮消耗，按官方价目本地估算，进度环只在「余额 ÷ 今日节奏」真实存在时才出现。
 - **离线自足**：鲸鱼与背景都是内联 SVG / CSS，无图片请求、无第三方依赖、无遥测。
 
 ---
@@ -76,14 +81,15 @@
 
 ### 正常的余额
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/card-dark.webp" alt="深色明细卡片" /></td>
-    <td width="50%"><img src="docs/card-light.webp" alt="浅色明细卡片" /></td>
-  </tr>
-</table>
+| 深色（系统深色） | 浅色（系统浅色） |
+|---|---|
+| ![深色](docs/card-dark.webp) | ![浅色](docs/card-light.webp) |
 
-卡片分三块：品牌头（鲸鱼徽标 + `DEEPSEEK / 余额` + 状态胶囊）、明细（27px 合计 + 三行次级信息）、操作（刷新 / 去充值）。右下角是 8.5% 不透明度的鲸鱼剪影，只做背景，不抢数字。
+徽章是「钱包图标 + 金额」，24px 高、与左侧头像文字齐平；切到用量标签时图标换成趋势线。金额超过一百万时缩写为 `¥9.99m`，悬停提示和卡片里始终是精确值。
+
+卡片分四块：品牌头（鲸鱼徽标 + `DEEPSEEK / 余额` + 状态胶囊）、**余额 / 用量标签条**、明细（27px 合计 + 三行次级信息 + 更新时间/账号）、操作（刷新 / 去充值）。右下角是鲸鱼剪影，只做背景，不抢数字。
+
+两种外观共用同一套扁平结构，只有色值不同：深色是 `rgba(24,27,36,.62)`，浅色是 `rgba(255,255,255,.58)`，各自配 1px 发丝边和一层很短的阴影。外观由 **macOS 系统设置**决定，切换后无需刷新。
 
 ### 状态一眼可读
 
@@ -107,6 +113,20 @@
     <td align="center"><sub>未配置 · 写明原因而不是错误码</sub></td>
   </tr>
 </table>
+
+### 用量标签页
+
+![用量标签页](docs/usage-dark.webp)
+
+| 区块 | 说明 |
+|---|---|
+| **今日消耗** | 今天所有已结算轮次的费用之和；下面的环形进度是「余额 ÷ 今日折算全天消耗」，也就是按今天的节奏还能用几天 |
+| **高峰 / 空闲算力** | 今天分别落在高峰、空闲时段的费用，一眼看出错峰省了多少 |
+| **峰谷状态** | 现在处于高峰还是空闲（北京时间工作日 09:00–12:00、14:00–18:00 为高峰），以及多久后切换 |
+| **近 7 天** | 每天消耗的柱状图，今天高亮 |
+| **逐轮消耗** | 今天最近 5 轮：时间、输入/缓存/输出 token、费用；橙点时高峰、绿点时空闲 |
+
+数据来自宿主收到的会话用量事件，按 `cordis.patch.yml` 里的价目表在本地折算，**不上传任何内容**，也不记录提示词。模型不在价目表里时只计 token、不计金额。
 
 ### 重构前后
 
@@ -245,6 +265,10 @@ dsh plugin --profile desktop add "github:chauvetliu/dsh-balance-pro"
 | `lowBalanceThreshold` | `10` | 低于该金额时徽章变警示色并显示红点 |
 | `readTotalCosts` | `true` | 是否读取「累计消费」和账号邮箱（见下） |
 | `requestTimeoutMs` | `8000` | 单次上游请求超时（上限 60 秒） |
+| `pricing` | 官方价目 | 用量标签页的价目表与峰谷时段，单位「元 / 百万 tokens」 |
+| `usageDays` | `7` | 近 N 天柱状图（上限 90） |
+| `usageTurnLimit` | `40` | 逐轮列表最多返回多少轮（上限 200） |
+| `usageStorePath` | `$DSH_HOME/balance-pro-usage.jsonl` | 用量账本文件；目录不可写时只保留内存计数 |
 
 ### `readTotalCosts` 是什么
 
@@ -252,6 +276,22 @@ DeepSeek 官方 SDK 的 `deepseekAccount` 服务只投影出两个钱包，**丢
 
 - `true`（默认）：卡片显示累计消费和邮箱；
 - `false`：完全不碰官方服务之外的接口，累计消费显示 `—`，账号退化为手机号掩码。
+
+### `pricing` 是什么
+
+用量标签页的费用是**本地估算**：平台接口只给钱包余额和累计消费，没有按日、按轮的金额，但每一轮结算都带提供方的 token 用量。插件把用量按价目表折算，价目默认是官方公开价：
+
+```yaml
+pricing:
+  offPeakMultiplier: 0.5           # 空闲价 = 高峰价 × 0.5
+  peakWindows: ['09:00-12:00', '14:00-18:00']   # 北京时间
+  peakWeekdaysOnly: true           # 周末全天空闲
+  models:                          # 元 / 百万 tokens
+    deepseek-flash:  { cacheHit: 0.04, cacheMiss: 2, output: 8 }
+    deepseek-v4-pro: { cacheHit: 0.30, cacheMiss: 9, output: 27 }
+```
+
+输入按「缓存命中 / 未命中」两段计价，缓存写入按未命中价；输出单独计价。价目变了改这里即可，不需要改代码。模型不在 `models` 或 `aliases` 里时只计 token、不计金额（显示 `—`），不会瞎猜。
 
 ---
 
@@ -294,6 +334,31 @@ GET /dsh-balance-pro/balance.json[?force=1]
   "error": "余额接口请求失败（HTTP 503）"
 }
 ```
+
+```
+GET /dsh-balance-pro/usage.json[?force=1]
+```
+
+```jsonc
+{
+  "ok": true,
+  "currency": "CNY",
+  "timezone": "Asia/Shanghai",
+  "today": { "day": "2026-11-11", "yuan": 0.8421, "turns": 6, "tokens": 184320,
+             "unpricedTurns": 0, "peakYuan": 0.5118, "offPeakYuan": 0.3303,
+             "savedYuan": 0.421, "ifAllOffPeakYuan": 0.4211 },
+  "runway": { "days": 18.4, "progress": 0.054, "burnYuan": 5.2 },  // 无余额或今日无消耗时是 null
+  "peak": { "now": true, "windows": [{ "start": "09:00", "end": "12:00" }],
+            "offPeakMultiplier": 0.5, "nextChange": { "inMinutes": 96, "at": "12:00" } },
+  "series": [{ "day": "2026-11-05", "yuan": 1.2, "tokens": 210000, "turns": 4 }],
+  "turns": { "total": 6, "unpriced": 0, "hasMore": true,
+             "recent": [{ "turn": 6, "at": "…", "peak": true, "card": "deepseek-flash",
+                          "yuan": 0.2148, "tokens": { "uncachedInput": 12800, "cacheRead": 52000,
+                                                      "output": 2100, "cacheWrite": 0 } }] }
+}
+```
+
+`usage.json` 与 `balance.json` 同一套准入规则；`force=1` 会先刷新钱包再给用量（否则用量本身总是即时的）。
 
 错误码：`NO_KEY`、`CREDENTIALS_UNAVAILABLE`、`UNAUTHORIZED`、`RATE_LIMITED`、`HTTP`、`NETWORK`、`TIMEOUT`、`PARSE`、`SHAPE`。
 
@@ -344,6 +409,14 @@ npm publish --access public
 
 插件靠 `[data-avatar-status]` / `[class*="_avatar"]` 找侧边栏账号行。宿主改版改了结构时，会退回右下角（不会消失、不会错位）。遇到这种情况欢迎提 issue 附上 DOM 片段。
 
+**用量标签页显示「还没有用量数据」**
+
+用量只能从**安装并重启之后**的会话里累计：插件在收到会话结算事件时才记账，历史对话不会被回填。发一轮对话、等 10 秒左右再打开卡片即可看到。
+
+**用量和平台账单对不上**
+
+这是本地估算：token 数来自会话里记录的提供方用量，单价来自 `pricing`。差异通常来自节假日（插件只按周末判断空闲时段，不认法定节假日）和改过价。介意可以关掉账本，只用余额。
+
 **如何强制回到默认位置**
 
 插件本身不保存位置（拖动已禁用），位置每次都由账号行实时计算，无需重置。
@@ -354,17 +427,18 @@ npm publish --access public
 
 - **不支持多币种汇总**：只显示配置的那一种币种（默认 CNY）。
 - **累计消费是"绕过投影"读的**：见 [`readTotalCosts`](#readtotalcosts-是什么)；介意就关掉。
-- **不统计今日消耗 / 峰谷价 / 逐轮消耗**：那需要本地账本与用量事件，属于另一类插件。
 - **只在 0.2.2-rc.1 桌面端实测**：其它版本的服务组合（是否有 `deepseekAccount`、账号行类名、模块图行为）未逐一验证。
 - **依赖宿主 DOM 特征定位**：见上面「徽章跑到了窗口右下角」。
 - **玻璃效果依赖 `backdrop-filter`**：不支持的宿主会退化为实色卡片，布局和文字不变。
+- **用量是本地估算**：以会话里记录的 token 用量 × 价目表为准，周末/法定节假日的空闲时段只按「周末」判断，不感知法定节假日；与账单可能有几分钱差异。
+- **账本只记录本机会话**：换设备不会带过去，删掉 `balance-pro-usage.jsonl` 即清空。
 
 ---
 
 ## 开发
 
 ```sh
-npm test        # node --test，64 个用例，零第三方依赖
+npm test        # node --test，102 个用例，零第三方依赖
 npm run check   # 语法自检
 ```
 
@@ -375,7 +449,8 @@ npm run check   # 语法自检
 | `index.js` | **宿主半区**：注册 `/dsh-balance-pro/*` 路由、读凭据/账号会话、请求上游、缓存与 CORS |
 | `lib/balance.js` | 纯函数：上游响应解析、错误分类、脱敏、payload 组装 |
 | `lib/request.js` | 准入校验（Host / Origin / Sec-Fetch-Site + 宿主栅栏） |
-| `client.js` | **浏览器半区**：手写模块 bundle，自挂载徽章与卡片（样式内联） |
+| `lib/usage.js` | 纯函数：价目表与峰谷时段、逐轮计价、账本折叠、今日/近 7 天汇总 |
+| `client.js` | **浏览器半区**：手写模块 bundle，自挂载徽章、双标签卡片与图表（样式内联） |
 | `cordis.patch.yml` | bundle 补丁：把插件插进 profile 配置树并给默认配置 |
 | `docs/visual.md` | 视觉设计说明：液态玻璃配方、鲸鱼用法、主题令牌与降级 |
 | `test/` | 单测 |

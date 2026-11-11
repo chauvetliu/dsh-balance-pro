@@ -12,6 +12,11 @@
 #   refreshMinutes       宿主后台刷新间隔（分钟），默认 10
 #   lowBalanceThreshold  低于该金额时胶囊变琥珀色，默认 10
 #   requestTimeoutMs     单次上游请求超时（毫秒），默认 8000
+#   pricing              用量 tab 的价目表与峰谷时段（默认是 DeepSeek 官方价目，
+#                        见 https://api-docs.deepseek.com/zh-cn/quick_start/pricing）
+#   usageDays            近 N 天柱状图，默认 7
+#   usageTurnLimit       逐轮列表最多返回多少轮，默认 40
+#   usageStorePath       用量账本 JSONL 路径；留空则用 $DSH_HOME/balance-pro-usage.jsonl
 - insert:
     - id: dsh-balance-pro
       name: dsh-balance-pro
@@ -25,6 +30,20 @@
         # 累计消费（total_costs）与邮箱不在 deepseekAccount 的投影里：开启后宿主会
         # 用同一份账号凭据直接读平台 summary / profile。关掉即完全只用官方服务。
         readTotalCosts: true
+        # 用量按本地账本 × 价目表估算：价目单位是「元 / 百万 tokens」。
+        # 官方每天 09:00-12:00、14:00-18:00（北京时间，工作日）为高峰，
+        # 其余时段及周末为空闲，空闲价为高峰价的一半。
+        pricing:
+          currency: CNY
+          offPeakMultiplier: 0.5
+          peakWindows: ['09:00-12:00', '14:00-18:00']
+          peakWeekdaysOnly: true
+          models:
+            deepseek-flash: { cacheHit: 0.04, cacheMiss: 2, output: 8 }
+            deepseek-v4-pro: { cacheHit: 0.30, cacheMiss: 9, output: 27 }
+        usageDays: 7
+        usageTurnLimit: 40
+        usageStorePath: ''
         # The pill mounts itself and the desktop page is dsh-app://app, so the
         # bundle served for the client-modules row carries the Host's loopback
         # origin. This flag documents that the row is fetched, not bundled.

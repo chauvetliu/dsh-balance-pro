@@ -21,4 +21,4 @@ coverage/
 *.log
 
 # Local design preview harness and captures
-.preview/
+local/

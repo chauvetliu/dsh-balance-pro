@@ -30,6 +30,7 @@
  */
 
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
@@ -37,6 +38,9 @@ import {
   CODES, balanceError, httpError, payload, readBalance, readCredential, redact, transportError,
 } from './lib/balance.js'
 import { admission } from './lib/request.js'
+import {
+  DEFAULT_PRICING, emptyLedger, foldEvent, normalizePricing, summarize, usageOf,
+} from './lib/usage.js'
 
 const PACKAGE_ROOT = path.dirname(fileURLToPath(import.meta.url))
 
@@ -56,6 +60,7 @@ const PACKAGE_VERSION = readPackageVersion()
 const BASE_PATH = '/dsh-balance-pro'
 const BALANCE_PATH = `${BASE_PATH}/balance.json`
 const CLIENT_PATH = `${BASE_PATH}/client.js`
+const USAGE_PATH = `${BASE_PATH}/usage.json`
 
 const DEFAULT_CONFIG = Object.freeze({
   apiKeyEnv: 'DEEPSEEK_API_KEY',
@@ -64,6 +69,9 @@ const DEFAULT_CONFIG = Object.freeze({
   refreshMinutes: 10,
   lowBalanceThreshold: 10,
   requestTimeoutMs: 8000,
+  pricing: DEFAULT_PRICING,
+  usageDays: 7,
+  usageTurnLimit: 40,
 })
 
 /** Re-read timeout for a cold credentials service (it may still be loading). */
@@ -188,6 +196,14 @@ export function normalizeConfig(input) {
     lowBalanceThreshold: pick(config.lowBalanceThreshold, DEFAULT_CONFIG.lowBalanceThreshold, isNonNegative),
     requestTimeoutMs: Math.min(pick(config.requestTimeoutMs, DEFAULT_CONFIG.requestTimeoutMs, isPositive), 60_000),
     readTotalCosts: config.readTotalCosts !== false,
+    // Rate card + peak windows for the usage tab. Unknown models are counted
+    // as tokens but never priced, so a wrong table can only under-report.
+    pricing: normalizePricing(config.pricing),
+    usageDays: Math.min(pick(config.usageDays, DEFAULT_CONFIG.usageDays, isPositive), 90),
+    usageTurnLimit: Math.min(pick(config.usageTurnLimit, DEFAULT_CONFIG.usageTurnLimit, isPositive), 200),
+    // Test seam and offline deployments: an explicit JSONL path. A directory
+    // is invalid and falls back to the DSH home.
+    usageStorePath: isText(config.usageStorePath) ? String(config.usageStorePath).trim() : '',
   }
 }
 
@@ -355,6 +371,9 @@ export class BalanceService {
 
     this.inflight = this.read()
       .then((result) => {
+        // Remember the settlement time separately: a stale payload must keep
+        // the timestamp of the success it is showing, not "now".
+        result.settledAt = this.now()
         this.last = result
         this.failure = null
         this.failedAt = 0
@@ -722,8 +741,235 @@ export class BalanceService {
       fromCache: extra.fromCache === true,
       lowBalanceThreshold: this.config.lowBalanceThreshold,
       refreshMinutes: this.config.refreshMinutes,
-      fetchedAt: failed ? fallback?.at ?? this.now() : result.at,
+      fetchedAt: failed ? fallback?.settledAt ?? fallback?.at ?? this.now() : result.at,
     })
+  }
+}
+
+/**
+ * How many turns the on-disk ledger keeps before the oldest are dropped.
+ * 20k turns is months of heavy use and a few megabytes of JSONL.
+ */
+const USAGE_MAX_TURNS = 20_000
+
+/**
+ * How many unwritten ledger lines are kept while the store is failing.
+ * One line is a few hundred bytes, so this caps the memory cost of a
+ * read-only profile at a couple of megabytes.
+ */
+const USAGE_MAX_PENDING = 2_000
+
+/**
+ * The local usage ledger behind the usage tab.
+ *
+ * The platform bills per wallet, not per day, and exposes no per-call spend;
+ * the session feed does carry provider-reported usage for every settlement,
+ * so each settled turn is priced here and appended to a JSONL file the plugin
+ * owns. Nothing leaves the machine and no token or prompt text is stored —
+ * only the last sample per (session, turn), its timestamp, its tier and its
+ * token buckets.
+ *
+ * Every path is defensive: a Host without a home directory, a read-only
+ * profile or a malformed line degrades to an empty ledger, never a crash.
+ */
+export class UsageLedger {
+  /**
+   * @param options - `{ config, logger, storePath, now }`.
+   */
+  constructor(options = {}) {
+    this.config = options.config ?? { pricing: DEFAULT_PRICING, usageDays: 7, usageTurnLimit: 40 }
+    this.logger = options.logger ?? console
+    this.now = options.now ?? Date.now
+    this.storePath = options.storePath ?? null
+    /** In-memory state, loaded once from disk when a store path is known. */
+    this.state = null
+    /** Pending append, coalesced so one turn does not mean one write. */
+    this.flushTimer = null
+    this.appendBuffer = []
+    this.warned = false
+  }
+
+  /**
+   * Ledger state, bootstrapping from disk on first use.
+   * @returns the state.
+   */
+  snapshot() {
+    if (this.state !== null) return this.state
+    this.state = emptyLedger()
+    if (this.storePath === null) return this.state
+    let text = ''
+    try {
+      text = fs.readFileSync(this.storePath, 'utf8')
+    } catch {
+      // No file yet: the first turn creates it.
+      return this.state
+    }
+    for (const line of text.split('\n')) {
+      if (line.trim() === '') continue
+      let record
+      try {
+        record = JSON.parse(line)
+      } catch {
+        continue
+      }
+      if (!record || typeof record.session !== 'string' || typeof record.line !== 'object') continue
+      // The file stores buckets, not the provider's field names; map them back
+      // so replay prices exactly what the live fold did.
+      const buckets = record.usage || {}
+      this.state = foldEvent(this.state, {
+        type: 'assistant/message',
+        time: record.time,
+        data: {
+          turn: record.line.turn,
+          model: record.line.model,
+          provider: record.line.provider,
+          usage: {
+            inputTokens: buckets.uncachedInput,
+            outputTokens: buckets.output,
+            cacheReadTokens: buckets.cacheRead,
+            cacheWriteTokens: buckets.cacheWrite,
+          },
+        },
+      }, record.session, this.config.pricing)
+    }
+    return this.state
+  }
+
+  /**
+   * Fold a batch of committed session events.
+   * @param sessionId - session that produced them.
+   * @param events - committed events.
+   */
+  ingest(sessionId, events) {
+    if (typeof sessionId !== 'string' || sessionId === '') return
+    if (!Array.isArray(events) || events.length === 0) return
+    for (const event of events) {
+      const before = this.snapshot()
+      const after = foldEvent(before, event, sessionId, this.config.pricing)
+      if (after === before) continue
+      this.state = after
+      const usage = usageRecordOf(event)
+      if (usage !== null) {
+        // Buffer first, then schedule: a scheduled flush always has its line.
+        this.appendBuffer.push({ session: sessionId, time: event.time, usage: usage.usage, line: usage.line })
+        this.scheduleFlush()
+      }
+    }
+    this.prune()
+  }
+
+  /** Coalesce appends: one flush per animation-sized window of turns. */
+  scheduleFlush() {
+    if (this.storePath === null || this.flushTimer !== null) return
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null
+      this.flush()
+    }, 400)
+    this.flushTimer.unref?.()
+  }
+
+  /**
+   * Write the buffered lines, newest state already folded in memory.
+   *
+   * A failed write puts the lines back at the head of the buffer so the next
+   * flush retries them; the buffer is capped so an unwritable disk costs
+   * bounded memory instead of growing for the rest of the session.
+   */
+  flush() {
+    if (this.storePath === null || this.appendBuffer.length === 0) return
+    const lines = this.appendBuffer
+    this.appendBuffer = []
+    try {
+      fs.mkdirSync(path.dirname(this.storePath), { recursive: true })
+      fs.appendFileSync(this.storePath, lines.map((line) => JSON.stringify(line)).join('\n') + '\n', 'utf8')
+    } catch (error) {
+      if (this.appendBuffer.length + lines.length <= USAGE_MAX_PENDING) {
+        this.appendBuffer = lines.concat(this.appendBuffer)
+      }
+      if (!this.warned) {
+        this.warned = true
+        this.logger.warn?.(`dsh-balance-pro: usage ledger not writable (${redact((error && error.message) || error)})`)
+      }
+    }
+  }
+
+  /**
+   * Keep the newest {@link USAGE_MAX_TURNS} turns in memory and on disk.
+   *
+   * Rewriting is rare (once the cap is crossed) and bounded: the file is
+   * replaced atomically through a sibling temp file.
+   */
+  prune() {
+    const state = this.snapshot()
+    // Pending lines are not on disk yet: rewriting the file now would drop
+    // them, so the cap waits for the next flushed turn.
+    if (this.appendBuffer.length > 0) return
+    let count = 0
+    for (const session of Object.values(state.sessions)) count += Object.keys(session.turns).length
+    if (count <= USAGE_MAX_TURNS) return
+    const rows = []
+    for (const [sessionId, session] of Object.entries(state.sessions)) {
+      for (const turn of Object.values(session.turns)) rows.push({ sessionId, turn })
+    }
+    rows.sort((left, right) => right.turn.at - left.turn.at)
+    const kept = new Set(rows.slice(0, USAGE_MAX_TURNS).map((row) => `${row.sessionId}:${row.turn.turn}`))
+    const sessions = {}
+    for (const row of rows.slice(0, USAGE_MAX_TURNS)) {
+      sessions[row.sessionId] = sessions[row.sessionId] || { turns: {} }
+      sessions[row.sessionId].turns[row.turn.turn] = row.turn
+    }
+    this.state = { version: 1, sessions }
+    if (this.storePath === null) return
+    try {
+      const text = rows.filter((row) => kept.has(`${row.sessionId}:${row.turn.turn}`))
+        .sort((left, right) => left.turn.at - right.turn.at)
+        .map((row) => JSON.stringify({
+          session: row.sessionId,
+          time: row.turn.at,
+          usage: row.turn.tokens,
+          line: { turn: row.turn.turn, model: row.turn.model, provider: row.turn.provider },
+        }))
+        .join('\n')
+      const temp = `${this.storePath}.tmp`
+      fs.mkdirSync(path.dirname(this.storePath), { recursive: true })
+      fs.writeFileSync(temp, text + '\n', 'utf8')
+      fs.renameSync(temp, this.storePath)
+    } catch (error) {
+      if (!this.warned) {
+        this.warned = true
+        this.logger.warn?.(`dsh-balance-pro: usage ledger prune failed (${redact((error && error.message) || error)})`)
+      }
+    }
+  }
+
+  /**
+   * The usage tab payload.
+   * @param options - `{ balance }` in yuan, for the runway bar.
+   * @returns the summary body.
+   */
+  summary(options = {}) {
+    return summarize(this.snapshot(), {
+      now: this.now(),
+      balance: options.balance,
+      days: this.config.usageDays,
+      limit: this.config.usageTurnLimit,
+      pricing: this.config.pricing,
+    })
+  }
+}
+
+/**
+ * The JSONL record for one settlement, or null when it carries no usage.
+ * @param event - committed session event.
+ * @returns `{ usage, line }` or null.
+ */
+function usageRecordOf(event) {
+  if (!event || event.type !== 'assistant/message' || !event.data) return null
+  const sample = usageOf(event)
+  if (sample === null) return null
+  return {
+    usage: sample.usage,
+    line: { turn: Number(event.data.turn) || 0, model: sample.model, provider: sample.provider },
   }
 }
 
@@ -765,6 +1011,37 @@ function corsHeaders() {
 }
 
 /**
+ * Where the usage ledger lives when the config names no path.
+ *
+ * `$DSH_HOME` wins (the desktop shell sets it); otherwise `~/.dsh`. A Host
+ * without a home directory gets no persistence, only in-memory counts.
+ * @returns a JSONL path, or null for memory-only.
+ */
+export function defaultUsageStorePath() {
+  const base = String(process.env.DSH_HOME || '').trim()
+  if (base !== '') return path.join(base, 'balance-pro-usage.jsonl')
+  try {
+    const home = os.homedir()
+    return home ? path.join(home, '.dsh', 'balance-pro-usage.jsonl') : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Stable id for the session a `session/event` names.
+ * @param session - live session object (or an id, in tests).
+ * @returns the id string.
+ */
+function sessionIdOf(session) {
+  if (typeof session === 'string') return session
+  if (!session || typeof session !== 'object') return ''
+  const candidates = [session.id, session.sessionId, session.address && session.address.sessionId,
+    session.snapshot && session.snapshot.id]
+  return candidates.find((value) => typeof value === 'string' && value !== '') || ''
+}
+
+/**
  * The Host plugin object. `name` must equal the package name so cordis can
  * label the fiber and client-modules can pair the browser row with it.
  */
@@ -794,6 +1071,31 @@ export default {
         }
       },
     })
+
+    // ── local usage ledger ──────────────────────────────────────────────────
+    // Listeners stay outside the webServer injection so the ledger keeps
+    // counting even in a Host without a page; the route only reads it.
+    const ledger = new UsageLedger({
+      config,
+      logger,
+      storePath: typeof config.usageStorePath === 'string' && config.usageStorePath !== ''
+        ? config.usageStorePath
+        : defaultUsageStorePath(),
+    })
+    root.effect(() => {
+      const off = typeof root.on === 'function'
+        ? root.on('session/event', (session, event) => {
+          const events = Array.isArray(event) ? event : [event]
+          for (const item of events) {
+            if (item) ledger.ingest(sessionIdOf(session), [item])
+          }
+        })
+        : () => {}
+      return () => {
+        typeof off === 'function' ? off() : undefined
+        ledger.flush()
+      }
+    }, 'dsh-balance-pro: usage ledger')
 
     // ── browser half + API, once a web server exists ────────────────────────
     root.inject(['webServer'], (scoped) => {
@@ -881,7 +1183,7 @@ export default {
           return
         }
         const force = target.searchParams.get('force') === '1'
-        if (target.pathname !== BALANCE_PATH) {
+        if (target.pathname !== BALANCE_PATH && target.pathname !== USAGE_PATH) {
           sendJson(res, 404, { ok: false, code: 'NOT_FOUND', error: 'unknown route' }, cors)
           return
         }
@@ -890,7 +1192,35 @@ export default {
           res.end()
           return
         }
+        if (target.pathname === USAGE_PATH) {
+          await usageRoute(force, res)
+          return
+        }
         const body = await service.get({ force })
+        sendJson(res, 200, body, cors)
+      }
+
+      /**
+       * Answer the usage route.
+       *
+       * The wallet is read from the balance cache (never forced here: the
+       * tab's own refresh button forces `balance.json`, and the usage read
+       * simply picks up the freshest wallet). The usage numbers themselves
+       * come from the local ledger and are always current, so `force` only
+       * decides whether the wallet is refreshed first.
+       */
+      async function usageRoute(force, res) {
+        const cors = corsHeaders()
+        if (force) await service.get({ force: true }).catch(() => undefined)
+        let balance = null
+        try {
+          const payload = await service.get({})
+          balance = payload && payload.ok && typeof payload.totalBalance === 'number' ? payload.totalBalance : null
+        } catch {
+          balance = null
+        }
+        ledger.flush()
+        const body = ledger.summary({ balance })
         sendJson(res, 200, body, cors)
       }
 
@@ -921,4 +1251,4 @@ export default {
 
 // Exported for the test suite; not part of the cordis plugin contract.
 
-export { BALANCE_PATH, CLIENT_PATH, PLUGIN_ROW_PATH }
+export { BALANCE_PATH, CLIENT_PATH, PLUGIN_ROW_PATH, USAGE_PATH }

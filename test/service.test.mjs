@@ -34,7 +34,8 @@ function makeService(options = {}) {
 }
 
 test('normalizeConfig keeps valid values and repairs the rest', () => {
-  assert.deepEqual(normalizeConfig(undefined), {
+  const defaults = normalizeConfig(undefined)
+  assert.deepEqual({ ...defaults, pricing: undefined }, {
     apiKeyEnv: 'DEEPSEEK_API_KEY',
     baseURL: 'https://api.deepseek.com',
     currency: 'CNY',
@@ -42,7 +43,14 @@ test('normalizeConfig keeps valid values and repairs the rest', () => {
     lowBalanceThreshold: 10,
     requestTimeoutMs: 8000,
     readTotalCosts: true,
+    usageDays: 7,
+    usageTurnLimit: 40,
+    usageStorePath: '',
+    pricing: undefined,
   })
+  // The usage rate card and windows come from the published defaults.
+  assert.deepEqual(defaults.pricing.peakWindows, ['09:00-12:00', '14:00-18:00'])
+  assert.deepEqual(defaults.pricing.models['deepseek-flash'], { cacheHit: 0.04, cacheMiss: 2, output: 8 })
   const custom = normalizeConfig({
     apiKeyEnv: 'MY_KEY',
     baseURL: 'https://proxy.example.com/deepseek/',
@@ -57,6 +65,15 @@ test('normalizeConfig keeps valid values and repairs the rest', () => {
   assert.equal(custom.refreshMinutes, 10, 'zero falls back to the default')
   assert.equal(custom.lowBalanceThreshold, 10)
   assert.equal(custom.requestTimeoutMs, 60000, 'the timeout is capped')
+  const usage = normalizeConfig({
+    usageDays: 999,
+    usageTurnLimit: 0,
+    pricing: { models: { 'deepseek-flash': { cacheHit: 0.02, cacheMiss: 1, output: 4 } }, peakWindows: ['07:00-09:00'] },
+  })
+  assert.equal(usage.usageDays, 90, 'the series window is capped')
+  assert.equal(usage.usageTurnLimit, 40, 'a non-positive limit falls back')
+  assert.deepEqual(usage.pricing.models['deepseek-flash'], { cacheHit: 0.02, cacheMiss: 1, output: 4 })
+  assert.deepEqual(usage.pricing.peakWindows, ['07:00-09:00'])
   const broken = normalizeConfig({ baseURL: 'not a url', currency: '', refreshMinutes: 30 })
   assert.equal(broken.baseURL, 'https://api.deepseek.com')
   assert.equal(broken.currency, 'CNY')

@@ -211,6 +211,8 @@ test('the plugin exports the shape cordis needs and mounts its routes', () => {
     // here, and this exact route fills in the Host's loopback origin.
     '/plugins/dsh-balance-pro/client.js',
   ])
+  // usage.json rides the same prefix route as balance.json, so two routes.
+  assert.ok(routes.some((route) => route.path === '/dsh-balance-pro'))
 })
 
 test('the config patch layer is applied (currency, threshold, refresh)', async () => {
