@@ -4,26 +4,31 @@
 
 在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 里显示 DeepSeek 账户余额的插件：**侧边栏账号行右端一个余额徽章**，点开是一张明细卡片——合计、充值余额、赠送余额、累计消费、更新时间和账号，带「刷新」和「去充值」。
 
-![余额徽章](docs/badge-dark.png)
+![余额徽章](docs/glass-badge.webp)
 
-![明细卡片](docs/card-dark.png)
+界面重构成**深海液态玻璃**：宽 300px 的浮层、40px 背景模糊、带折射感的渐变描边、官方 DeepSeek 鲸鱼徽标与水下剪影。徽章和卡片都跟随宿主的明暗主题，而不是只看系统设置。
+
+| 深色 | 浅色 |
+|---|---|
+| ![深色](docs/glass-dark.webp) | ![浅色](docs/glass-light.webp) |
 
 - **只读插件**：不写会话、不改模型配置；只读余额，点「去充值」才会打开 DeepSeek 充值页。
 - **API Key 不离开宿主进程**：浏览器半区只拿到金额和平台掩码后的账号，拿不到 key。
 - **失败不拖垮页面**：没配 key、key 失效、断网时徽章显示 `余额 —`，卡片里写明原因；不会让 DSH 启动失败。
-- **跟随主题**：优先用宿主的设计令牌，取不到时按系统明暗自动切换。
+- **液态玻璃**：宿主真实令牌（`--dsw-alias-*` / `--dsw-static-deepseek-*`）+ 分层高光 + 细噪点 + 背板模糊；不支持 `backdrop-filter` 时自动退化为实色。
+- **跟随宿主主题**：直接读取页面背景与 `data-ds-dark-theme`，宿主强制明暗也能跟上。
 
-| 深色 | 浅色 |
-|---|---|
-| ![深色](docs/card-dark.png) | ![浅色](docs/card-light.png) |
+余额偏低时徽章转为琥珀色、出现红点，卡片右上角给出「偏低」：
 
-余额偏低时徽章转为警示色并出现红点：
-
-![低余额](docs/card-low-balance.png)
+![低余额](docs/glass-low.webp)
 
 没配 Key 时给出可读的原因，而不是一串错误码：
 
-![未配置](docs/card-error.png)
+![未配置](docs/glass-error.webp)
+
+从平面卡片到玻璃浮层的对比：
+
+![重构前后](docs/glass-before-after.webp)
 
 ---
 
@@ -33,6 +38,7 @@
 - [卸载](#卸载)
 - [更新](#更新)
 - [配置](#配置)
+- [视觉设计](docs/visual.md)
 - [余额从哪来](#余额从哪来)
 - [数据契约](#数据契约)
 - [发布到 npm（可选）](#发布到-npm可选)
@@ -282,6 +288,7 @@ npm publish --access public
 - **不统计今日消耗 / 峰谷价 / 逐轮消耗**：那需要本地账本与用量事件，属于另一类插件。
 - **只在 0.2.2-rc.1 桌面端实测**：其它版本的服务组合（是否有 `deepseekAccount`、账号行类名、模块图行为）未逐一验证。
 - **依赖宿主 DOM 特征定位**：见上面「徽章跑到了窗口右下角」。
+- **玻璃效果依赖 `backdrop-filter`**：不支持的宿主会退化为实色卡片，布局和文字不变。
 
 ---
 
@@ -301,6 +308,7 @@ npm run check   # 语法自检
 | `lib/request.js` | 准入校验（Host / Origin / Sec-Fetch-Site + 宿主栅栏） |
 | `client.js` | **浏览器半区**：手写模块 bundle，自挂载徽章与卡片（样式内联） |
 | `cordis.patch.yml` | bundle 补丁：把插件插进 profile 配置树并给默认配置 |
+| `docs/visual.md` | 视觉设计说明：液态玻璃配方、鲸鱼用法、主题令牌与降级 |
 | `test/` | 单测 |
 
 **改哪里要重启？** 改 `index.js` / `lib/*` → 重启应用；改 `client.js` → 刷新页面（⌘R）。

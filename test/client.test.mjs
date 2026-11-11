@@ -267,7 +267,8 @@ test('apply() mounts a plain-DOM pill into the page body', () => {
   // One rule opens the block (with the token variables), the layout follows.
   assert.match(styles.textContent, /#dsh-balance-pro\{--dsb-surface:/u)
   assert.match(styles.textContent, /position:fixed;right:16px;bottom:44px;z-index:900/u)
-  assert.match(styles.textContent, /prefers-color-scheme:dark/u, 'the card follows the scheme')
+  assert.match(styles.textContent, /\[data-tone="dark"\]/u, 'the card follows the host tone')
+  assert.match(styles.textContent, /backdrop-filter:blur/u, 'the card is a glass surface')
 
   const button = host.children.find((child) => child.className === 'dsb-pill')
   assert.ok(button, 'the pill button exists')
@@ -512,7 +513,7 @@ test('the injected stylesheet stays scoped to the pill and the card', () => {
   assert.ok(selectors.length > 5, 'the stylesheet has rules: ' + selectors.length)
   for (const selector of selectors) {
     for (const part of selector.split(',')) {
-      assert.match(part.trim(), /^\.dsb-|^#dsh-balance-pro(\[|$)|^\d+%$|^from$|^to$/u, selector)
+      assert.match(part.trim(), /^\.dsb-|^#dsh-balance-pro(\[|\s|$)|^\d+%$|^from$|^to$/u, selector)
     }
   }
   assert.ok(!fs.existsSync(path.join(ROOT, 'client.css')), 'no orphan stylesheet file')

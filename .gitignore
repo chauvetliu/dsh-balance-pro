@@ -19,3 +19,6 @@ Thumbs.db
 # Test and tool output
 coverage/
 *.log
+
+# Local design preview harness and captures
+.preview/
