@@ -2,7 +2,7 @@
 
 > 这是一份设计说明，不是安装文档。安装、配置与数据契约见 [README](../README.md)。
 
-![重构前后](glass-before-after.webp)
+![重构前后](before-after.webp)
 
 Apple 从 macOS 26 / iOS 26 开始把这种材质语言叫作 **Liquid Glass**；你说的 macOS 27 可以理解为同一条路线的延续。这里复刻的是它的材质逻辑——半透明、背景模糊、镜面高光、边缘折射、同心圆角——没有调用任何系统私有 API，所以在 DSH 的 Web 渲染层里也能成立。
 

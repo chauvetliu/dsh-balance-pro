@@ -1,44 +1,67 @@
-# dsh-balance-pro
+<div align="center">
 
-> DeepSeek Harness 插件 · 侧边栏余额徽章 · 只读 · Key 不出宿主进程
+<img src="docs/badge.webp" width="220" alt="dsh-balance-pro 余额徽章" />
 
-在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 里显示 DeepSeek 账户余额的插件：**侧边栏账号行右端一个余额徽章**，点开是一张明细卡片——合计、充值余额、赠送余额、累计消费、更新时间和账号，带「刷新」和「去充值」。
+<br />
 
-![余额徽章](docs/glass-badge.webp)
+<h1>dsh-balance-pro</h1>
 
-界面重构成**深海液态玻璃**：宽 300px 的浮层、40px 背景模糊、带折射感的渐变描边、官方 DeepSeek 鲸鱼徽标与水下剪影。徽章和卡片都跟随宿主的明暗主题，而不是只看系统设置。
+<p><strong>DeepSeek Harness 插件 · 侧边栏余额徽章</strong><br />
+只读 · API Key 不出宿主进程 · 深海液态玻璃</p>
 
-| 深色 | 浅色 |
-|---|---|
-| ![深色](docs/glass-dark.webp) | ![浅色](docs/glass-light.webp) |
+<p>
+  <img src="https://img.shields.io/badge/license-MIT-4d6bfe" alt="MIT License" />
+  <img src="https://img.shields.io/badge/tests-64%20passing-22c55e" alt="64 tests passing" />
+  <img src="https://img.shields.io/badge/DSH-0.2.2--rc.1-5686fe" alt="DSH 0.2.2-rc.1" />
+  <img src="https://img.shields.io/badge/telemetry-none-64748b" alt="No telemetry" />
+</p>
 
-- **只读插件**：不写会话、不改模型配置；只读余额，点「去充值」才会打开 DeepSeek 充值页。
-- **API Key 不离开宿主进程**：浏览器半区只拿到金额和平台掩码后的账号，拿不到 key。
+<p>
+  <a href="#安装">安装</a> ·
+  <a href="#配置">配置</a> ·
+  <a href="#界面">界面</a> ·
+  <a href="docs/visual.md">视觉设计</a> ·
+  <a href="#常见问题">常见问题</a>
+</p>
+
+</div>
+
+---
+
+在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 里显示 DeepSeek 账户余额：**侧边栏账号行右端一个余额徽章**，点开是一张明细卡片——合计、充值余额、赠送余额、累计消费、更新时间和账号，带「刷新」和「去充值」。
+
+不需要填 Key：配了 API Key 或登录过客户端，二者有一个就能读。
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/hero-dark.webp" alt="深色主题下的余额卡片" /></td>
+    <td width="50%"><img src="docs/hero-light.webp" alt="浅色主题下的余额卡片" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>深色</b> · 跟随宿主主题</sub></td>
+    <td align="center"><sub><b>浅色</b> · 同一套令牌</sub></td>
+  </tr>
+</table>
+
+## 为什么值得装
+
+- **只读**：不写会话、不改模型配置；点「去充值」才会打开 DeepSeek 充值页。
+- **Key 不出宿主进程**：浏览器半区只拿到金额和平台掩码后的账号，拿不到 key、请求头或上游原文。
 - **失败不拖垮页面**：没配 key、key 失效、断网时徽章显示 `余额 —`，卡片里写明原因；不会让 DSH 启动失败。
-- **液态玻璃**：宿主真实令牌（`--dsw-alias-*` / `--dsw-static-deepseek-*`）+ 分层高光 + 细噪点 + 背板模糊；不支持 `backdrop-filter` 时自动退化为实色。
-- **跟随宿主主题**：直接读取页面背景与 `data-ds-dark-theme`，宿主强制明暗也能跟上。
-
-余额偏低时徽章转为琥珀色、出现红点，卡片右上角给出「偏低」：
-
-![低余额](docs/glass-low.webp)
-
-没配 Key 时给出可读的原因，而不是一串错误码：
-
-![未配置](docs/glass-error.webp)
-
-从平面卡片到玻璃浮层的对比：
-
-![重构前后](docs/glass-before-after.webp)
+- **液态玻璃**：宿主真实令牌 `--dsw-alias-*` / `--dsw-static-deepseek-*`、40px 背板模糊、镜面描边与细噪点。
+- **跟随宿主主题**：读取页面背景与 `data-ds-dark-theme`，宿主强制明暗也能跟上，不只看系统设置。
+- **离线自足**：鲸鱼与背景都是内联 SVG / CSS，无图片请求、无第三方依赖、无遥测。
 
 ---
 
 ## 目录
 
+- [界面](#界面)
+- [视觉设计](docs/visual.md)
 - [安装](#安装)
 - [卸载](#卸载)
 - [更新](#更新)
 - [配置](#配置)
-- [视觉设计](docs/visual.md)
 - [余额从哪来](#余额从哪来)
 - [数据契约](#数据契约)
 - [发布到 npm（可选）](#发布到-npm可选)
@@ -46,6 +69,50 @@
 - [已知限制](#已知限制)
 - [开发](#开发)
 - [License](#license)
+
+---
+
+## 界面
+
+### 正常的余额
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/card-dark.webp" alt="深色明细卡片" /></td>
+    <td width="50%"><img src="docs/card-light.webp" alt="浅色明细卡片" /></td>
+  </tr>
+</table>
+
+卡片分三块：品牌头（鲸鱼徽标 + `DEEPSEEK / 余额` + 状态胶囊）、明细（27px 合计 + 三行次级信息）、操作（刷新 / 去充值）。右下角是 8.5% 不透明度的鲸鱼剪影，只做背景，不抢数字。
+
+### 状态一眼可读
+
+状态胶囊永远带文字，不只靠颜色：
+
+| 胶囊 | 触发条件 | 徽章 |
+|---|---|---|
+| **正常** | 读到可用余额 | 品牌蓝边框 |
+| **偏低** | 低于 `lowBalanceThreshold` | 琥珀色边框 + 右上角红点 |
+| **缓存** | 本次刷新失败，显示上次成功值 | 琥珀色 + 卡片内说明原因 |
+| **异常** | 没配 key / key 失效 / 网络不可达 | 红色 + 可读原因 |
+| **读取中** | 首次读取或手动刷新 | 鲸鱼徽标呼吸 |
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/card-low.webp" alt="余额偏低：琥珀色状态与红点" /></td>
+    <td width="50%"><img src="docs/card-error.webp" alt="未配置 Key：给出可读原因" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>偏低 · 琥珀色 + 肩部红点</sub></td>
+    <td align="center"><sub>未配置 · 写明原因而不是错误码</sub></td>
+  </tr>
+</table>
+
+### 重构前后
+
+![从平面卡片到玻璃浮层](docs/before-after.webp)
+
+材质、层级与鲸鱼的取舍写在 [视觉设计说明](docs/visual.md)。
 
 ---
 
@@ -243,6 +310,8 @@ npm publish --access public
 ```
 
 其余几个相近名字已被占用，别再试：`dsh-deepseek-balance`、`dsh-balance`、`dsh-balance-badge`、`dsh-balance-widget`、`dsh-wallet`。
+
+---
 
 ## 常见问题
 
