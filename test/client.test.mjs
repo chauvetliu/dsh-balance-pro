@@ -619,8 +619,11 @@ test('the usage tab reads usage.json lazily and paints today, peak and turns', a
   const ring = findByClass(body, 'dsb-ring')
   assert.equal(ring.getAttribute('data-empty'), 'false')
   assert.equal(findByClass(body, 'dsb-ring-center').textContent, '37%', 'the runway ring shows a real fraction')
+  // The chip is label + amount in separate spans so neither wraps; the label
+  // and the number must still read as one line.
   const peak = findByClass(body, 'dsb-tier-peak')
-  assert.match(peak.textContent, /高峰算力 ¥0\.01/u)
+  assert.equal(findByClass(peak, 'dsb-tier-label').textContent, '高峰算力')
+  assert.equal(findByClass(peak, 'dsb-tier-amount').textContent, '¥0.013')
   const rows = findByClass(body, 'dsb-turns').children
   assert.equal(rows.length, 2)
   assert.match(rows[0].children[2].textContent, /¥/)

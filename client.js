@@ -123,6 +123,8 @@ window.__ModuleLoader__.load({
         today: '今日消耗',
         todayPeak: '高峰算力',
         todayOffPeak: '空闲算力',
+        todayPeakShort: '高峰',
+        todayOffPeakShort: '空闲',
         runway: '按今日节奏还能用 {n} 天',
         runwayShort: '余额覆盖',
         burnToday: '折算全天 {amount}',
@@ -140,6 +142,7 @@ window.__ModuleLoader__.load({
         tokensCache: '缓存',
         usageNoData: '还没有用量数据：发一轮对话后自动出现',
         usageNote: '按官方价目本地估算，仅供参考',
+        tokensLegend: '↑ 输入 · ⚡ 缓存 · ↓ 输出',
         series7: '近 7 天',
         saved: '今日靠空闲时段省下 {amount}',
         hours: '{n} 小时',
@@ -186,13 +189,16 @@ window.__ModuleLoader__.load({
         today: 'Spent today',
         todayPeak: 'At peak rates',
         todayOffPeak: 'At off-peak rates',
+        todayPeakShort: 'Peak',
+        todayOffPeakShort: 'Off-peak',
         runway: 'About {n} days left at today’s pace',
         runwayShort: 'Balance covers',
         burnToday: 'On pace for {amount}',
         noRunway: 'Nothing spent today yet',
         peakPeak: 'Peak',
         peakOffPeak: 'Off-peak',
-        peakIn: '{tier} in {n}',
+        peakIn: '{tier} starts in {n}',
+        peakInShort: '{tier} in {n}',
         turnList: 'Per turn',
         turnEmpty: 'No settled turns today',
         turnMore: '{n} earlier turns',
@@ -203,6 +209,7 @@ window.__ModuleLoader__.load({
         tokensCache: 'cached',
         usageNoData: 'No usage yet — it appears after your first turn',
         usageNote: 'Estimated locally from the published price sheet',
+        tokensLegend: '↑ input · ⚡ cached · ↓ output',
         series7: 'Last 7 days',
         saved: 'Saved {amount} by running off-peak today',
         hours: '{n} h',
@@ -467,9 +474,11 @@ window.__ModuleLoader__.load({
       '.dsb-today-amount{font-size:21px;font-weight:650;letter-spacing:-.03em;color:var(--dsb-text);font-variant-numeric:tabular-nums;line-height:1.1}',
       '.dsb-today-sub{font-size:10px;color:var(--dsb-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.dsb-tiers{grid-area:chips;display:flex;gap:6px;margin-top:2px}',
-      '.dsb-tier{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 8px;border-radius:7px;font-size:10px;font-weight:500;color:var(--dsb-muted);',
+      '.dsb-tier{display:inline-flex;align-items:center;gap:4px;height:21px;min-width:0;padding:0 8px;border-radius:7px;font-size:10px;font-weight:500;color:var(--dsb-muted);white-space:nowrap;',
       '  background:rgba(255,255,255,.06);border:1px solid var(--dsb-line)}',
       '#dsh-balance-pro[data-tone="light"] .dsb-tier{background:rgba(255,255,255,.55)}',
+      '.dsb-tier-label{min-width:0;overflow:hidden;text-overflow:ellipsis}',
+      '.dsb-tier-amount{color:var(--dsb-text);font-weight:600;font-variant-numeric:tabular-nums;flex:none}',
       '.dsb-tier::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;flex:none}',
       '.dsb-tier-peak{color:var(--dsb-warn);border-color:color-mix(in srgb,var(--dsb-warn) 22%,transparent)}',
       '.dsb-tier-off{color:var(--dsb-ok);border-color:color-mix(in srgb,var(--dsb-ok) 22%,transparent)}',
@@ -482,14 +491,17 @@ window.__ModuleLoader__.load({
       '.dsb-spark{position:relative;z-index:1;display:flex;align-items:flex-end;gap:5px;height:34px;margin:6px 0 2px;padding:0 2px}',
       '.dsb-spark i{flex:1;max-width:30px;border-radius:4px 4px 2px 2px;background:color-mix(in srgb,var(--dsb-brand-2) 20%,transparent);transition:background .2s ease}',
       '.dsb-spark-labels{position:relative;z-index:1;display:flex;gap:5px;padding:0 2px;margin-bottom:9px}',
-      '.dsb-spark-labels span{flex:1;max-width:30px;text-align:center;font-size:8.5px;color:var(--dsb-faint);white-space:nowrap}',
+      '.dsb-spark-labels span{flex:1;max-width:30px;text-align:center;font-size:9px;line-height:1.15;color:var(--dsb-faint);white-space:nowrap}',
       '.dsb-spark i[data-empty="true"]{background:color-mix(in srgb,var(--dsb-text) 10%,transparent)}',
       '.dsb-spark i[data-today="true"]{background:var(--dsb-brand-2)}',
       '.dsb-spark-labels span[data-today="true"]{color:var(--dsb-brand-2);font-weight:600}',
       '#dsh-balance-pro[data-tone="light"] .dsb-spark i{background:rgba(65,118,230,.22)}',
       '#dsh-balance-pro[data-tone="light"] .dsb-spark i[data-empty="true"]{background:rgba(15,17,21,.07)}',
       '#dsh-balance-pro[data-tone="light"] .dsb-spark i[data-today="true"]{background:#4176e6;box-shadow:none}',
-      '.dsb-turn-head{position:relative;z-index:1;display:flex;align-items:baseline;justify-content:space-between;font-size:10px;color:var(--dsb-faint);margin-bottom:4px}',
+      '.dsb-turn-head{position:relative;z-index:1;display:flex;align-items:baseline;gap:8px;font-size:10px;color:var(--dsb-faint);margin-bottom:4px}',
+      '.dsb-turn-legend{color:var(--dsb-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}',
+      '.dsb-turn-legend[hidden]{display:none}',
+      '.dsb-turn-note{margin-left:auto}',
       '.dsb-turns{position:relative;z-index:1;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}',
       '.dsb-turn{display:grid;grid-template-columns:56px 1fr auto;gap:8px;align-items:center;height:25px;border-radius:6px;font-size:10px;color:var(--dsb-muted)}',
       '.dsb-turn:hover{background:rgba(255,255,255,.05)}',
@@ -541,6 +553,18 @@ window.__ModuleLoader__.load({
      * @param params - interpolation values.
      * @returns display text.
      */
+    /**
+     * Whether chip captions take their short form.
+     *
+     * The card is a fixed 300px wide, and the English captions ("At off-peak
+     * rates") are twice the Chinese ones ("空闲算力"); both must still fit one
+     * line next to the amount, so English uses the short pair.
+     * @returns true when the active dictionary is not Chinese.
+     */
+    function shortLabels() {
+      return currentTable() !== DICT.zh
+    }
+
     function t(key, params) {
       const table = currentTable()
       const text = Object.prototype.hasOwnProperty.call(table, key) ? table[key] : key
@@ -1032,8 +1056,20 @@ window.__ModuleLoader__.load({
       tierChips.className = 'dsb-tiers'
       const peakChip = document.createElement('span')
       peakChip.className = 'dsb-tier dsb-tier-peak'
+      const peakChipLabel = document.createElement('span')
+      peakChipLabel.className = 'dsb-tier-label'
+      const peakChipValue = document.createElement('span')
+      peakChipValue.className = 'dsb-tier-amount'
+      peakChip.appendChild(peakChipLabel)
+      peakChip.appendChild(peakChipValue)
       const offChip = document.createElement('span')
       offChip.className = 'dsb-tier dsb-tier-off'
+      const offChipLabel = document.createElement('span')
+      offChipLabel.className = 'dsb-tier-label'
+      const offChipValue = document.createElement('span')
+      offChipValue.className = 'dsb-tier-amount'
+      offChip.appendChild(offChipLabel)
+      offChip.appendChild(offChipValue)
       tierChips.appendChild(peakChip)
       tierChips.appendChild(offChip)
       todayCard.appendChild(ring)
@@ -1068,9 +1104,13 @@ window.__ModuleLoader__.load({
       turnHead.className = 'dsb-turn-head'
       const turnTitle = document.createElement('span')
       turnTitle.textContent = t('turnList')
+      // Explains the arrow form of the token column; empty in Chinese.
+      const turnLegend = document.createElement('span')
+      turnLegend.className = 'dsb-turn-legend'
       const turnNote = document.createElement('span')
       turnNote.className = 'dsb-turn-note'
       turnHead.appendChild(turnTitle)
+      turnHead.appendChild(turnLegend)
       turnHead.appendChild(turnNote)
       bodyUsage.appendChild(turnHead)
       const turnList = document.createElement('ul')
@@ -1343,8 +1383,12 @@ window.__ModuleLoader__.load({
             ? t('burnToday', { amount: formatSmall(usage.runway.burnYuan, currency) })
             : ''
           ringCenter.textContent = progress === null ? '' : Math.round(progress * 100) + '%'
-          peakChip.textContent = t('todayPeak') + ' ' + formatSmall(today.peakYuan, currency)
-          offChip.textContent = t('todayOffPeak') + ' ' + formatSmall(today.offPeakYuan, currency)
+          // Narrow card: drop the "rates" wording, keep the amount inline, so
+          // neither chip has to wrap onto a second line.
+          peakChipLabel.textContent = t(shortLabels() ? 'todayPeakShort' : 'todayPeak')
+          peakChipValue.textContent = formatSmall(today.peakYuan, currency)
+          offChipLabel.textContent = t(shortLabels() ? 'todayOffPeakShort' : 'todayOffPeak')
+          offChipValue.textContent = formatSmall(today.offPeakYuan, currency)
           peakChip.hidden = false
           offChip.hidden = false
 
@@ -1353,7 +1397,12 @@ window.__ModuleLoader__.load({
           peakRow.setAttribute('data-peak', peak.now ? 'true' : 'false')
           peakNow.textContent = tier
           const next = peak.nextChange
-          peakNext.textContent = next ? t('peakIn', { n: formatDuration(next.inMinutes), tier: peak.now ? t('peakOffPeak') : t('peakPeak') }) : ''
+          // Two forms: the roomy one, and a short one that still fits beside
+          // the current-tier label when the translation is long.
+          const nextTier = peak.now ? t('peakOffPeak') : t('peakPeak')
+          const nextText = next ? t('peakIn', { n: formatDuration(next.inMinutes), tier: nextTier }) : ''
+          peakNext.textContent = nextText
+          peakNext.setAttribute('data-short', shortLabels() ? 'true' : 'false')
           const windows = (peak.windows || []).map((window) => window.start + '–' + window.end).join(' / ')
           peakRow.title = windows === '' ? '' : windows
 
@@ -1394,6 +1443,8 @@ window.__ModuleLoader__.load({
         // The header keeps one identity per tab: 余额 or 用量.
         title.textContent = t(activeTab === 'usage' ? 'tabUsage' : 'balance')
         turnTitle.textContent = t('turnList')
+        turnLegend.textContent = shortLabels() ? t('tokensLegend') : ''
+        turnLegend.hidden = !shortLabels()
         usageNote.textContent = t('usageNote')
       }
 
@@ -1411,9 +1462,17 @@ window.__ModuleLoader__.load({
         const tokens = document.createElement('span')
         tokens.className = 'dsb-turn-tokens'
         const buckets = (turn && turn.tokens) || {}
-        tokens.textContent = t('tokensIn') + ' ' + formatTokens(buckets.uncachedInput)
-          + ' · ' + t('tokensCache') + ' ' + formatTokens(buckets.cacheRead)
-          + ' · ' + t('tokensOut') + ' ' + formatTokens(buckets.output)
+        if (shortLabels()) {
+          // English: ↑ uncached-in · ⚡ cached · ↓ out. Shorter than three
+          // words and still unambiguous next to the timestamps.
+          tokens.textContent = '\u2191' + formatTokens(buckets.uncachedInput)
+            + ' \u00b7 \u26a1' + formatTokens(buckets.cacheRead)
+            + ' \u00b7 \u2193' + formatTokens(buckets.output)
+        } else {
+          tokens.textContent = t('tokensIn') + ' ' + formatTokens(buckets.uncachedInput)
+            + ' · ' + t('tokensCache') + ' ' + formatTokens(buckets.cacheRead)
+            + ' · ' + t('tokensOut') + ' ' + formatTokens(buckets.output)
+        }
         const amount = document.createElement('span')
         amount.className = 'dsb-turn-amount'
         amount.textContent = turn.yuan === null ? '—' : formatSmall(turn.yuan, currency)
@@ -1445,9 +1504,11 @@ window.__ModuleLoader__.load({
           // Weekday initials for the last week; today reads as "今天".
           const at = new Date(day.day + 'T12:00:00')
           const isToday = index === series.length - 1
+          // Two letters where one would repeat (Tu/Th, Sa/Su); a single
+          // letter for the days that stay unique reads as a chart, not a word.
           const weekday = currentTable() === DICT.zh
             ? '日一二三四五六'.charAt(at.getDay())
-            : 'SMTWTFS'.charAt(at.getDay())
+            : ['Su', 'M', 'Tu', 'W', 'Th', 'F', 'Sa'][at.getDay()]
           label.textContent = isToday ? (currentTable() === DICT.zh ? '今' : 'T') : weekday
           if (isToday) label.setAttribute('data-today', 'true')
           sparkLabels.appendChild(label)
