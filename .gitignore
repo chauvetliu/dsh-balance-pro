@@ -22,3 +22,6 @@ coverage/
 
 # Local design preview harness and captures
 local/
+
+# The README logo is built from icon.svg
+!docs/logo.png
