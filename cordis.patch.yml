@@ -1,0 +1,30 @@
+# dsh-balance-pro —— bundle patch（插件的挂载声明）
+#
+# `dsh plugin --profile desktop add <pkg>` 会把本包记进 profile 的
+# dependencies 和 dsh.profile.bundles；DSH 启动时按 bundle 层栈叠加这段 patch，
+# 把插件挂进宿主配置树。浏览器半区由 package.json 的 dsh.client 声明，绑定在
+# 这个 name 行上（子路径行不会携带半区，所以这里必须是裸包名）。
+#
+# 配置项都可被 profile 的 cordis.patch.yml 覆盖（用户的 patch 层在本文件之后）：
+#   apiKeyEnv            凭据名，默认 DEEPSEEK_API_KEY
+#   baseURL              余额接口前缀，默认 https://api.deepseek.com
+#   currency             多币种钱包时优先选的币种，默认 CNY
+#   refreshMinutes       宿主后台刷新间隔（分钟），默认 10
+#   lowBalanceThreshold  低于该金额时胶囊变琥珀色，默认 10
+#   requestTimeoutMs     单次上游请求超时（毫秒），默认 8000
+- insert:
+    - id: dsh-balance-pro
+      name: dsh-balance-pro
+      config:
+        apiKeyEnv: DEEPSEEK_API_KEY
+        baseURL: https://api.deepseek.com
+        currency: CNY
+        refreshMinutes: 10
+        lowBalanceThreshold: 10
+        requestTimeoutMs: 8000
+        # 累计消费（total_costs）与邮箱不在 deepseekAccount 的投影里：开启后宿主会
+        # 用同一份账号凭据直接读平台 summary / profile。关掉即完全只用官方服务。
+        readTotalCosts: true
+        # The pill mounts itself and the desktop page is dsh-app://app, so the
+        # bundle served for the client-modules row carries the Host's loopback
+        # origin. This flag documents that the row is fetched, not bundled.

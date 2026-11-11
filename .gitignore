@@ -1,0 +1,21 @@
+# Installed dependencies (dsh installs this plugin's peers into the profile).
+node_modules/
+pnpm-lock.yaml
+package-lock.json
+
+# Local preferences and secrets
+*.local
+.env
+.env.*
+.credentials.yaml
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Test and tool output
+coverage/
+*.log

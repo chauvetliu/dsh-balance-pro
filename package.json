@@ -1,0 +1,44 @@
+{
+  "name": "dsh-balance-pro",
+  "version": "0.1.0",
+  "description": "Show the DeepSeek account balance inside DeepSeek Harness: total, topped-up, granted and lifetime spend, refreshed automatically. The API key never leaves the Host process. 在 DSH 里显示 DeepSeek 余额：合计、充值、赠送、累计消费，Key 不出宿主进程。",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "deepseek",
+    "balance",
+    "widget"
+  ],
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "test": "node --test 'test/*.test.mjs'",
+    "check": "node --check index.js && node --check client.js && node --check lib/balance.js && node --check lib/request.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chauvetliu/dsh-balance-pro.git"
+  },
+  "homepage": "https://github.com/chauvetliu/dsh-balance-pro#readme",
+  "bugs": {
+    "url": "https://github.com/chauvetliu/dsh-balance-pro/issues"
+  }
+}
