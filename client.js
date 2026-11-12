@@ -129,6 +129,11 @@ window.__ModuleLoader__.load({
         runwayShort: '余额覆盖',
         burnToday: '折算全天 {amount}',
         noRunway: '今日暂无消耗',
+        unpricedToday: '今日 {n} 轮不是 DeepSeek 消耗',
+        estimateMark: '估算',
+        dayTip: '{day} · ¥{yuan}（{n} 轮）',
+        dayTipEstimate: '{day} · 估算 ¥{yuan}（{n} 轮，来自其他供应商）',
+        dayTipEmpty: '{day} · 无消耗',
         peakPeak: '高峰',
         peakOffPeak: '空闲',
         peakIn: '{n} 后转{tier}',
@@ -195,6 +200,11 @@ window.__ModuleLoader__.load({
         runwayShort: 'Balance covers',
         burnToday: 'On pace for {amount}',
         noRunway: 'Nothing spent today yet',
+        unpricedToday: '{n} turns today were not DeepSeek spend',
+        estimateMark: 'est.',
+        dayTip: '{day} · ¥{yuan} ({n} turns)',
+        dayTipEstimate: '{day} · est. ¥{yuan} ({n} turns, other providers)',
+        dayTipEmpty: '{day} · no spend',
         peakPeak: 'Peak',
         peakOffPeak: 'Off-peak',
         peakIn: '{tier} starts in {n}',
@@ -467,6 +477,7 @@ window.__ModuleLoader__.load({
       '.dsb-ring .dsb-ring-arc{stroke-dashoffset:calc(var(--dsb-circ) * (1 - var(--dsb-progress)))}',
       '.dsb-ring[data-level="high"] .dsb-ring-arc{stroke:var(--dsb-warn)}',
       '.dsb-ring[data-empty="true"] .dsb-ring-arc{stroke:transparent}',
+      '.dsb-ring[data-idle="true"] .dsb-ring-track{stroke:transparent}',
       '.dsb-ring-center{position:absolute;inset:0;display:grid;place-items:center;font-size:10px;font-weight:600;color:var(--dsb-text);font-variant-numeric:tabular-nums}',
       '.dsb-ring[data-empty="true"] .dsb-ring-center{display:none}',
       '.dsb-today-main{grid-area:main;display:flex;flex-direction:column;gap:2px;min-width:0}',
@@ -493,6 +504,9 @@ window.__ModuleLoader__.load({
       '.dsb-spark-labels{position:relative;z-index:1;display:flex;gap:5px;padding:0 2px;margin-bottom:9px}',
       '.dsb-spark-labels span{flex:1;max-width:30px;text-align:center;font-size:9px;line-height:1.15;color:var(--dsb-faint);white-space:nowrap}',
       '.dsb-spark i[data-empty="true"]{background:color-mix(in srgb,var(--dsb-text) 10%,transparent)}',
+      // A day whose spend is an off-card estimate (Qwen, GLM, …) is hatched so
+      // it never reads as DeepSeek money.
+      '.dsb-spark i[data-estimate="true"]{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--dsb-brand-2) 42%,transparent) 0 2px,transparent 2px 4.5px),color-mix(in srgb,var(--dsb-brand-2) 12%,transparent)}',
       '.dsb-spark i[data-today="true"]{background:var(--dsb-brand-2)}',
       '.dsb-spark-labels span[data-today="true"]{color:var(--dsb-brand-2);font-weight:600}',
       '#dsh-balance-pro[data-tone="light"] .dsb-spark i{background:rgba(65,118,230,.22)}',
@@ -1372,9 +1386,15 @@ window.__ModuleLoader__.load({
         } else {
           const today = usage.today || {}
           todayAmount.textContent = formatSmall(today.yuan, currency)
-          todaySub.textContent = runwayText(usage, currency)
+          // ¥0.00 is honest but unhelpful when turns did happen: name the
+          // reason instead of pretending a silent zero.
+          todaySub.textContent = (today.unpricedAll || 0) > 0 && !today.yuan
+            ? t('unpricedToday', { n: today.unpricedAll })
+            : runwayText(usage, currency)
           const progress = usage.runway && typeof usage.runway.progress === 'number' ? usage.runway.progress : null
           ring.setAttribute('data-empty', progress === null ? 'true' : 'false')
+          // No runway is not the same as running out: hide the track too.
+          ring.setAttribute('data-idle', progress === null ? 'true' : 'false')
           ring.setAttribute('data-level', progress !== null && progress >= 0.8 ? 'high' : 'normal')
           // The arc is drawn with a 0..1 fraction: the stylesheet maps it onto
           // the circle's circumference, so no DOM lookup is needed here.
@@ -1488,7 +1508,11 @@ window.__ModuleLoader__.load({
         spark.replaceChildren()
         sparkLabels.replaceChildren()
         const series = Array.isArray(input) ? input : []
-        const values = series.map((day) => Number(day.yuan) || 0)
+        // Off-card estimates count towards the bar height (so a Qwen day is
+        // visible) but are hatched, never added to the wallet figure.
+        const measured = series.map((day) => Number(day.yuan) || 0)
+        const estimated = series.map((day) => Number(day.estimateYuan) || 0)
+        const values = measured.map((yuan, index) => yuan + estimated[index])
         const max = Math.max(1e-9, ...values)
         for (let index = 0; index < series.length; index += 1) {
           const day = series[index]
@@ -1498,7 +1522,15 @@ window.__ModuleLoader__.load({
           bar.style.height = (values[index] === 0 ? 3 : 12 + Math.round(ratio * 22)) + 'px'
           bar.setAttribute('data-today', index === series.length - 1 ? 'true' : 'false')
           bar.setAttribute('data-empty', values[index] === 0 ? 'true' : 'false')
-          bar.title = day.day + ' · ' + formatSmall(values[index], (usage && usage.currency) || 'CNY')
+          bar.setAttribute('data-estimate', measured[index] === 0 && estimated[index] > 0 ? 'true' : 'false')
+          const currency = (usage && usage.currency) || 'CNY'
+          const turnsOfDay = Number(day.turns) || 0
+          const tip = day.day + ' · ' + (values[index] === 0
+            ? t('dayTipEmpty')
+            : (measured[index] === 0
+              ? t('dayTipEstimate', { yuan: formatSmall(estimated[index], currency).replace(/^¥/u, ''), n: turnsOfDay })
+              : t('dayTip', { yuan: formatSmall(values[index], currency).replace(/^¥/u, ''), n: turnsOfDay })))
+          bar.title = tip.replace(/\{day\}/gu, day.day)
           spark.appendChild(bar)
           const label = document.createElement('span')
           // Weekday initials for the last week; today reads as "今天".

@@ -38,9 +38,26 @@
           offPeakMultiplier: 0.5
           peakWindows: ['09:00-12:00', '14:00-18:00']
           peakWeekdaysOnly: true
+          # 走 DeepSeek 价目表的 provider：含自建的 OpenAI 兼容代理
+          # （如 deepseek-openai），它们扣的是同一个钱包。
+          providers: [deepseek]
           models:
             deepseek-flash: { cacheHit: 0.04, cacheMiss: 2, output: 8 }
             deepseek-v4-pro: { cacheHit: 0.30, cacheMiss: 9, output: 27 }
+          # 其他供应商（Qwen / GLM / Moonshot）的粗略牌价，只用来画图，
+          # 永远不进 DeepSeek 的余额账。模型名按前缀匹配，可自行增删。
+          catalog:
+            qwen:
+              label: Qwen
+              models:
+                qwen3-max: { cacheHit: 2.4, cacheMiss: 2.4, output: 12 }
+                qwen-plus: { cacheHit: 0.8, cacheMiss: 0.8, output: 2 }
+                qwen3-coder: { cacheHit: 1, cacheMiss: 4, output: 16 }
+                qwen-turbo: { cacheHit: 0.3, cacheMiss: 0.3, output: 0.6 }
+            glm:
+              label: GLM
+              models:
+                glm-4.6: { cacheHit: 4, cacheMiss: 4, output: 16 }
         usageDays: 7
         usageTurnLimit: 40
         usageStorePath: ''

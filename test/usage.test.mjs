@@ -284,3 +284,61 @@ test('a malformed day key never becomes an epoch zero', () => {
   assert.equal(dayKey(Number.NaN), 'NaN-NaN-NaN')
   assert.equal(dayKey(new Date(2026, 10, 11).getTime()), '2026-11-11')
 })
+test('a DeepSeek model behind another provider is still DeepSeek money', () => {
+  // An OpenAI-compatible proxy of DeepSeek models bills the same wallet: the
+  // provider is not literally "deepseek", but it is on the card.
+  const at = Date.parse('2026-11-11T10:00:00+08:00')
+  const tokens = { uncachedInput: 1000, cacheRead: 50000, cacheWrite: 0, output: 2000 }
+  const proxied = priceUsage(tokens, at, pricing, 'deepseek-flash', 'deepseek-openai')
+  assert.equal(proxied.card, 'deepseek-flash')
+  assert.equal(typeof proxied.micro, 'number')
+})
+
+test('an off-card route is counted and estimated, never added to the wallet', () => {
+  const at = Date.parse('2026-11-11T10:00:00+08:00')
+  const tokens = { uncachedInput: 1000, cacheRead: 0, cacheWrite: 0, output: 2000 }
+  const qwen = priceUsage(tokens, at, pricing, 'qwen3-max', 'qwen-token-plan-cn')
+  assert.equal(qwen.micro, null, 'not DeepSeek money')
+  assert.equal(qwen.card, null)
+  assert.equal(qwen.estimate.route, 'qwen')
+  assert.equal(qwen.estimate.micro, 2.4 * 1000 + 12 * 2000, 'roughest list price, 1e-6 yuan units')
+
+  const free = priceUsage(tokens, at, pricing, 'our-local-model', 'our-free-model')
+  assert.equal(free.micro, null)
+  assert.equal(free.estimate, null, 'an unknown model gets no invented price')
+})
+
+test('the summary keeps estimates out of today and draws them per day', () => {
+  const now = Date.parse('2026-11-11T20:00:00+08:00')
+  const qwenTurn = {
+    type: 'assistant/message',
+    time: Date.parse('2026-11-11T10:00:00+08:00'),
+    data: {
+      turn: 1,
+      message: { content: [], source: { provider: 'qwen-token-plan-cn', model: 'qwen3-max' } },
+      usage: { inputTokens: 1000, outputTokens: 2000, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    },
+  }
+  const deepseekTurn = {
+    type: 'assistant/message',
+    time: Date.parse('2026-11-11T10:05:00+08:00'),
+    data: {
+      turn: 2,
+      message: { content: [], source: { provider: 'deepseek-account', model: 'deepseek-flash' } },
+      usage: { inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    },
+  }
+  let state = emptyLedger()
+  state = foldEvent(state, qwenTurn, 's', pricing)
+  state = foldEvent(state, deepseekTurn, 's', pricing)
+  const summary = summarize(state, { now, days: 7, pricing, balance: 10 })
+  assert.equal(summary.today.yuan, 2, 'peak flash: 1M uncached input costs ¥2')
+  const day = summary.series.find((row) => row.day === '2026-11-11')
+  assert.equal(day.yuan, 2)
+  assert.ok(day.estimateYuan > 0, 'the Qwen day is drawn')
+  assert.equal(day.estimatedTurns, 1)
+  // One Qwen turn + no DeepSeek turns left unaccounted: the count is the turns
+  // the wallet figure does not include.
+  assert.equal(summary.today.unpricedAll, 1, 'the card can explain the gap')
+  assert.equal(summary.today.yuan, 2)
+})
