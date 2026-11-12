@@ -7,6 +7,7 @@ import {
   dayKey,
   dayWindow,
   emptyLedger,
+  estimateUsage,
   foldEvent,
   isPeak,
   nextWindowChange,
@@ -306,6 +307,32 @@ test('an off-card route is counted and estimated, never added to the wallet', ()
   const free = priceUsage(tokens, at, pricing, 'our-local-model', 'our-free-model')
   assert.equal(free.micro, null)
   assert.equal(free.estimate, null, 'an unknown model gets no invented price')
+})
+
+test('the stable DeepSeek name and every dated version share one card', () => {
+  // The API keeps one model name per card and retires dated versions behind it:
+  // both must price as that card, or a version bump silently loses the money.
+  for (const name of ['deepseek-flash', 'deepseek-v4.1-flash', 'deepseek-v4.1-flash-free',
+    'DeepSeek-V4.1-Flash-1017', 'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp']) {
+    assert.equal(cardForModel(name, pricing), 'deepseek-flash', name)
+  }
+  for (const name of ['deepseek-v4-pro', 'deepseek-v4.1-pro', 'DeepSeek-V4-Pro-0813']) {
+    assert.equal(cardForModel(name, pricing), 'deepseek-v4-pro', name)
+  }
+  // A longer name that is not a version of the card still gets no price.
+  assert.equal(cardForModel('deepseek-flashy', pricing), null)
+})
+
+test('vendor models resolve to their family, versions and dated builds included', () => {
+  // Vendors version their names rather than renaming the model; a dated suffix
+  // shares the family's list price, and the longest family wins.
+  const oneMillion = { uncachedInput: 1_000_000, cacheRead: 0, cacheWrite: 0, output: 0 }
+  assert.equal(estimateUsage(oneMillion, 'qwen3-max-2025-09-23', pricing).card, 'qwen3-max')
+  assert.equal(estimateUsage(oneMillion, 'qwen3-coder-plus', pricing).card, 'qwen3-coder')
+  assert.equal(estimateUsage(oneMillion, 'kimi-k2.5-0905', pricing).card, 'kimi-k2')
+  assert.equal(estimateUsage(oneMillion, 'glm-4.6-air', pricing).card, 'glm-4.6')
+  assert.equal(estimateUsage(oneMillion, 'deepseek-v4.1-flash', pricing), null, 'DeepSeek is carded, not catalogued')
+  assert.equal(estimateUsage(oneMillion, 'gpt-5', pricing), null)
 })
 
 test('the summary keeps estimates out of today and draws them per day', () => {

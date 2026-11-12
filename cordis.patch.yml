@@ -41,11 +41,16 @@
           # 走 DeepSeek 价目表的 provider：含自建的 OpenAI 兼容代理
           # （如 deepseek-openai），它们扣的是同一个钱包。
           providers: [deepseek]
+          # 官方每个档位只有一个模型名（deepseek-flash / deepseek-v4-pro），
+          # 版本号会滚动（今天是 DeepSeek-V4.1-Flash-1017），旧模型名仍可调用
+          # 且按同一价计费。别名表已覆盖这些写法，自行更换模型名时对照即可。
           models:
             deepseek-flash: { cacheHit: 0.04, cacheMiss: 2, output: 8 }
             deepseek-v4-pro: { cacheHit: 0.30, cacheMiss: 9, output: 27 }
           # 其他供应商（Qwen / GLM / Moonshot）的粗略牌价，只用来画图，
-          # 永远不进 DeepSeek 的余额账。模型名按前缀匹配，可自行增删。
+          # 永远不进 DeepSeek 的余额账。它们以版本为准，所以按「系列」匹配：
+          # qwen3-max-2025-09-23 → qwen3-max，kimi-k2.5-0905 → kimi-k2，
+          # 长系列优先（qwen3-coder 不会被当成 qwen3）。
           catalog:
             qwen:
               label: Qwen
